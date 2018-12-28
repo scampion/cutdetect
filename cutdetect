@@ -53,18 +53,18 @@ def get_frame_entropy(videofile):
     command = ['ffmpeg',
                '-i', videofile,
                '-f', 'image2pipe',
-               '-vf', 'scale=320:240',
+               '-vf', 'scale=160:120',
                '-pix_fmt', 'rgb24',
                '-vcodec', 'rawvideo', '-']
     pipe = sp.Popen(command, stdout=sp.PIPE, bufsize=10 ** 8)
-    raw_image = pipe.stdout.read(320 * 240 * 3)
+    raw_image = pipe.stdout.read(160 * 120 * 3)
     frame = 1
     while raw_image:
         image = np.fromstring(raw_image, dtype='uint8')
         e = entropy(image, base=10)
         yield e
         pipe.stdout.flush()
-        raw_image = pipe.stdout.read(320 * 240 * 3)
+        raw_image = pipe.stdout.read(160 * 120 * 3)
         frame += 1
 
 
