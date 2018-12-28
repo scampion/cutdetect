@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""
+Detect cut without entropy in video file.
+
+By default less than 25 frames are ignored
+
+Usage :
+-------
+cutdetect <videofile>
+
+Results:
+--------
+Frame number printed to stdout and saved in <videofile.mon> file
+
+Requirements:
+-------------
+- ffmpeg binary
+- numpy python package
+
+Author:
+-------
+Sébastien Campion
+
+Licence:
+--------
+Affero GPL
+"""
+import subprocess as sp
+from math import log, e
+
+import numpy as np
+import sys
+
+
+def entropy(labels, base=None):
+    n_labels = len(labels)
+    if n_labels <= 1:
+        return 0
+    value, counts = np.unique(labels, return_counts=True)
+    probs = counts / n_labels
+    n_classes = np.count_nonzero(probs)
+    if n_classes <= 1:
+        return 0
+    ent = 0
+    # Compute entropy
+    base = e if base is None else base
+    for i in probs:
+        ent -= i * log(i, base)
+    return ent
+
+
+def get_frame_entropy(videofile):
+    command = ['ffmpeg',
+               '-i', videofile,
+               '-f', 'image2pipe',
+               '-vf', 'scale=320:240',
+               '-pix_fmt', 'rgb24',
+               '-vcodec', 'rawvideo', '-']
+    pipe = sp.Popen(command, stdout=sp.PIPE, bufsize=10 ** 8)
+    raw_image = pipe.stdout.read(320 * 240 * 3)
+    frame = 1
+    while raw_image:
+        image = np.fromstring(raw_image, dtype='uint8')
+        e = entropy(image, base=10)
+        yield e
+        pipe.stdout.flush()
+        raw_image = pipe.stdout.read(320 * 240 * 3)
+        frame += 1
+
+
+def get_mono_cut(videofile, min_frames=25):
+    nb_mono = 0
+    start = 0
+    for f, e in enumerate(get_frame_entropy(videofile)):
+        if e == 0:
+            nb_mono += 1
+            if start == 0:
+                start = f
+        elif start > 0:
+            if nb_mono > min_frames:
+                yield start
+            start = 0
+            nb_mono = 0
+
+
+if __name__ == '__main__':
+    videofile = sys.argv[1]
+    with open(videofile + '.mon', 'w') as f:
+        for c in get_mono_cut(videofile):
+            print(c)
+            f.writelines("%d\n" % c)
+
